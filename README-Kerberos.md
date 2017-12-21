@@ -16,11 +16,14 @@ Follow the steps below for primary, secondary, etc, KDCs.
 
 2. Decide on a subdomain, e.g. `foo-01.mydomain.com`, and create a DNS entry to direct `foo-01.mydomain.com` to the above static IP address.
 
-3. Create an EC2 instance or get a VPS. If using EC2, you might consider one of the Debian Stretch community AMIs (I chose `debian-stretch-hvm-x86_64-gp2-2017-12-17-65723`). I selected a T2 Micro with 1 GB RAM and 8 GB Magnetic Storage. For the Security Group, allow traffic to ports 22 (for SSH) and 88 (for Kerberos). Assign your static IP address to this instance.
+3. Create an EC2 instance or get a VPS. If using EC2, you might consider one of the Debian Stretch community AMIs (I chose `debian-stretch-hvm-x86_64-gp2-2017-12-17-65723`). I selected a T2 Micro with 1 GB RAM and 8 GB Magnetic Storage. For the Security Group, allow traffic to ports 22 (TCP, for SSH) and 88 (UDP, for Kerberos). Assign your static IP address to this instance.
 
-4. SSH into your instance, and run the `update` and `upgrade` commands:
+4. SSH into your instance, and run the `update` and `upgrade` commands, and install `java`:
 
-    `sudo apt-get update && sudo apt-get upgrade`
+    ```
+    sudo apt-get update && sudo apt-get upgrade
+    sudo apt-get install -y default-jre
+    ```
 
 5. Change the hostname on the EC2 instance/VPS to be the FQDN `foo-01.mydomain.com`. Instructions are [available at this aws link for the Amazon Linux AMI](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/set-hostname.html). For Debian Stretch, you would replace the contents of `/etc/hostname` with the following
 
@@ -119,14 +122,27 @@ Test that the ticket was created:
 klist  # should output some issued date, expire date, etc.   
 ```
 
-While we are here, lets create a principal for `zookeeper`. Let us assume that your zookeeper server will be `zookeeper.yourdomain.com`. Execute the following (you will have to choose a password):
+While we are here, lets create principals for a `zookeeper`. Let us assume that your zookeeper server will be `zookeeper.yourdomain.com`. Execute the following (you will have to choose a password for each):
 
 ```
 sudo kadmin.local
-	addprinc zookeeper/zookeeper.yourdomain.com
-	quit
+  addprinc zookeeperclient
+	addprinc zookeeper/zookeeper-server-01
+	addprinc zookeeper/zookeeper-server-02
+	addprinc zookeeper/zookeeper-server-03
 ```
 
+Export the keytabs - Zookeper servers and clients will use these:
+
+```
+  ktadd -k /etc/security/zookeeperclient.keytab zookeeperclient
+  ktadd -k /etc/security/zookeeper-server-01.keytab zookeeper/zookeeper-server-01
+  ktadd -k /etc/security/zookeeper-server-02.keytab zookeeper/zookeeper-server-02
+  ktadd -k /etc/security/zookeeper-server-03.keytab zookeeper/zookeeper-server-03
+  quit
+```
+
+The next step is to set up and test connection to a Zookeeper ensemble.
 
 ## References
 

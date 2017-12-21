@@ -142,7 +142,7 @@ Export the keytabs - Zookeper servers and clients will use these:
   quit
 ```
 
-The next step is to set up and test connection to a Zookeeper ensemble.
+The next step is to [set up and test connection to a Zookeeper ensemble](README-ZooKeeper.md).
 
 ## References
 

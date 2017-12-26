@@ -91,11 +91,9 @@ Follow the steps below for primary, secondary, etc, KDCs.
 
     This will give admin privileges to any principal you add with the form `x/admin@y`
 
-
 13. Restart the server and the kdc:
 
     `sudo invoke-rc.d krb5-admin-server restart && sudo invoke-rc.d krb5-kdc restart`
-
 
 
 14. Test that there are no tickets already:
@@ -134,13 +132,13 @@ sudo kadmin.local
 	addprinc zookeeper/zookeeper-server-03.yourdomain.com
 ```
 
-Export the keytabs - Zookeper servers and clients will use these:
+Export the keytabs - Zookeper servers and clients will use these (you can name the `keytab` files whatever you want, you don't have to follow the convention I have used below):
 
 ```
-  ktadd -k /etc/security/zookeeperclient.keytab zookeeperclient/whatever
-  ktadd -k /etc/security/zookeeper-server-01.keytab zookeeper/zookeeper-server-01.yourdomain.com
-  ktadd -k /etc/security/zookeeper-server-02.keytab zookeeper/zookeeper-server-02.yourdomain.com
-  ktadd -k /etc/security/zookeeper-server-03.keytab zookeeper/zookeeper-server-03.yourdomain.com
+  ktadd -k /etc/security/zookeeperclient.whatever.keytab zookeeperclient/whatever
+  ktadd -k /etc/security/zookeeper.zookeeper-server-01.yourdomain.com.keytab zookeeper/zookeeper-server-01.yourdomain.com
+  ktadd -k /etc/security/zookeeper.zookeeper-server-02.yourdomain.com.keytab zookeeper/zookeeper-server-02.yourdomain.com
+  ktadd -k /etc/security/zookeeper.zookeeper-server-03.yourdomain.com.keytab zookeeper/zookeeper-server-03.yourdomain.com
   quit
 ```
 

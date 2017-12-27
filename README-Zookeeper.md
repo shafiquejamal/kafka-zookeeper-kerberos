@@ -38,7 +38,7 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
     dataDir=/home/zookeeper/dataDir
     dataLogDir=/home/zookeeper/dataLogDir
     clientPort=2181
-    # server.1=zookeeper-server-02.yourdomain.com:2888:3888
+    # server.1=0.0.0.0:2888:3888
     # server.2=zookeeper-server-02.yourdomain.com:2888:3888
     # server.3=zookeeper-server-03.yourdomain.com:2888:3888
     authProvider.1=org.apache.zookeeper.server.auth.SASLAuthenticationProvider
@@ -46,33 +46,61 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
     jaasLoginRenew=3600000
     ```
 
-    Note: For now, the `server.X` lines are commented out, in order to test the ZooKeeper server in StandAlone mode. Later we will uncomment these lines so that we can use ZooKeeper as an ensemble of servers, at which point this file will be exactly the same for each ZooKeeper server in the ZooKeeper ensemble.
+    Note: replace `zookeeper-server-0X` with `0.0.0.0` when X is the id of the Zookeeper instance you are setting up, and all other `server.X` lines should have `zookeeper-server-0X`. See [this StackOverflow post](https://stackoverflow.com/questions/30940981/zookeeper-error-cannot-open-channel-to-x-at-election-address) for more information on why this must be the case when using EC2.
+
+    For now, the `server.X` lines are commented out, in order to test the ZooKeeper server in StandAlone mode. Later we will uncomment these lines so that we can use ZooKeeper as an ensemble of servers.
 
 10. Create the `dataDir` and `dataLogDir` folders, and a `jaas folder`, and create a symlink from `zoo.cfg` to `zoo.cfg-ensemble`:
 
     ```
     mkdir /home/zookeeper/dataDir
     mkdir /home/zookeeper/dataLogDir
-    mkdir /home/zookeeper/log
     mkdir /home/zookeeper/jaas
     ln -s /home/zookeeper/zk/zookeeper-3.4.11/conf/zoo.cfg-ensemble /home/zookeeper/zk/zookeeper-3.4.11/conf/zoo.cfg
     ```
-11. In the `/home/zookeeper/jaas/` folder, place the `zookeeper-server-01.keytab` file that you created when setting up Kerberos. Make the `zookeeper` user the owner of this file, and make sure this user has read and write permissions on the file. Also in this folder, create a `jaas.conf` file with the following contents:
+
+11. In the `/home/zookeeper/zk/zookeeper-3.4.11/conf/log4j.properties` file, decide where you will place log files. Junqueira & Reed (see References below) recommend writing log files to a separate drive. If you want to keep them on the same drive for now, then replace the lines:
+
+    ```
+    zookeeper.log.dir=.
+    ...
+    zookeeper.tracelog.dir=.
+    ```
+
+    with
+
+    ```
+    zookeeper.log.dir=/home/zookeeper/log
+    ...
+    zookeeper.tracelog.dir=/home/zookeeper/log
+    ```
+
+    and create the log directory:
+
+    ```
+    mkdir /home/zookeeper/log
+    ```
+
+    You will have to also figure out how to get `zkServer.sh` to stop overriding values there. [See this (seemingly dead) issue](https://issues.apache.org/jira/browse/ZOOKEEPER-2170) for more details. It seems that the `log4j.properties` file is ignored in favor of the environment variables `ZOO_LOG_DIR` and `ZOO_LOG4J_PROP`.
+
+    If you decide to log, remember to periodically clear out the log files so that you do not run out of file storage space.
+
+12. In the `/home/zookeeper/jaas/` folder, place the `zookeeper-server-01.keytab` file that you created when setting up Kerberos. Make the `zookeeper` user the owner of this file, and make sure this user has read and write permissions on the file. Also in this folder, create a `jaas.conf` file with the following contents:
 
     ```
     Server {
-            com.sun.security.auth.module.Krb5LoginModule required
-            useTicketCache=false
-            useKeyTab=true
-            keyTab="/home/zookeeper/jaas/zookeeper-server-01.keytab"
-            storeKey=true
-            principal="zookeeper/zookeeper-server-01@YOURDOMAIN.COM";
+      com.sun.security.auth.module.Krb5LoginModule required
+      useTicketCache=false
+      useKeyTab=true
+      keyTab="/home/zookeeper/jaas/zookeeper-server-01.keytab"
+      storeKey=true
+      principal="zookeeper/zookeeper-server-01@YOURDOMAIN.COM";
     };
     ```
 
     Note that you would use `02` or `03` instead of `01` in the above file according to the ensemble number (id) that you are setting up.
 
-12. In `/home/zookeeper/dataDir/`, create a file `myid` and place a solitary `1` in this file:
+13. In `/home/zookeeper/dataDir/`, create a file `myid` and place a solitary `1` in this file:
 
     ```
     echo "1" > /home/zookeeper/dataDir/myid
@@ -81,21 +109,21 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
     `1` is used here because this is `zookeeper-server-01`. For `zookeeper-server-02`, one would use a `2` instead, etc.
 
 
-13. In the `/etc/` folder, place the `/etc/krb5.conf` file from [the Kerberos server that you set up earlier](README-Kerberos.md), and make sure it is world readable.
+14. In the `/etc/` folder, place the `/etc/krb5.conf` file from [the Kerberos server that you set up earlier](README-Kerberos.md), and make sure it is world readable.
 
-14. Repeat the above steps for the other ZooKeeper servers in the ensemble (`zookeeper-server-02` and `zookeeper-server-03`)
+15. Repeat the above steps for the other ZooKeeper servers in the ensemble (`zookeeper-server-02` and `zookeeper-server-03`)
 
-15. To test that the server starts without errors, execute the following command from `/home/zookeeper/zk/zookeeper-3.4.11/`:
+16. To test that the server starts without errors, execute the following command from `/home/zookeeper/zk/zookeeper-3.4.11/`:
 
     ```
-    JVMFLAGS="-Djava.security.auth.login.config=/home/zookeeper/jaas/jaas.conf -Dsun.security.krb5.debug=true" bin/zkServer.sh start-foreground
+    JVMFLAGS="-Djava.security.auth.login.config=/home/zookeeper/jaas/jaas.conf -Dsun.security.krb5.debug=true" ZOO_LOG_DIR="/home/zookeeper/log" ZOO_LOG4J_PROP=TRACE,CONSOLE,ROLLINGFILE bin/zkServer.sh start-foreground
     ```
 
     The output should be similar to the following:
 
     ```
     ...
-    >>> KrbAsRep cons in KrbAsReq.getReply zookeeper/zookeeper-server-01.eigenroute.com
+    >>> KrbAsRep cons in KrbAsReq.getReply zookeeper/zookeeper-server-01.yourdomain.com
     2017-12-26 20:46:20,231 [myid:] - INFO  [main:Login@297] - Server successfully logged in.
     2017-12-26 20:46:20,234 [myid:] - INFO  [main:NIOServerCnxnFactory@89] - binding to port 0.0.0.0/0.0.0.0:2181
     2017-12-26 20:46:20,235 [myid:] - INFO  [Thread-1:Login$1@130] - TGT refresh thread started.
@@ -106,7 +134,7 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
 
 ### Testing the ZooKeeper server in StandAlone mode.
 
-16. On another machine (EC2 instance, personal, whatever - as long as it is not the same machine as the server, though it can be), download ZooKeeper as before to a directory of your choosing - I'll assume you have downloaded it to your home directory:
+17. On another machine (EC2 instance, personal, whatever - as long as it is not the same machine as the server, though it can be), download ZooKeeper as before to a directory of your choosing - I'll assume you have downloaded it to your home directory:
 
     ```
     cd ~
@@ -116,9 +144,9 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
     cd zookeeper-3.4.11
     ```
 
-17. Place the `/etc/security/zookeeperclient.whatever.keytab` that you created in the [Kerberos](README-Kerberos.md) section in some directory, say `~/jaas/` (create this directory). Make sure you have read permission on it.
+18. Place the `/etc/security/zookeeperclient.whatever.keytab` that you created in the [Kerberos](README-Kerberos.md) section in some directory, say `~/jaas/` (create this directory). Make sure you have read permission on it.
 
-18. Also in the `~/jaas/` section, create a file called `jaas.conf` and add the following content to it:
+19. Also in the `~/jaas/` section, create a file called `jaas.conf` and add the following content to it:
 
     ```
     Client {
@@ -130,12 +158,12 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
       principal="zookeeperclient/whatever@YOURDOMAIN.COM";
     };
     ```
-19. Place the `/etc/krb5.conf` file from the Kerberos server that you set up in the `~/jaas/` directory of the client machine, and give yourself read permissions on it.
+20. Place the `/etc/krb5.conf` file from the Kerberos server that you set up in the `~/jaas/` directory of the client machine, and give yourself read permissions on it.
 
-20. From the `~/zookeeper-3.4.11/` directory, run the following command:
+21. From the `~/zookeeper-3.4.11/` directory, run the following command:
 
     ```
-    JVMFLAGS="-Djava.security.auth.login.config=/full/path/to/jaas/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/full/path/to/jass/krb5.conf" bin/zkCli.sh -server zookeeper-server-01.eigenroute.com:2181
+    JVMFLAGS="-Djava.security.auth.login.config=/full/path/to/jaas/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/full/path/to/jass/krb5.conf" bin/zkCli.sh -server zookeeper-server-01.yourdomain.com:2181
     ```
 
     If successful, the terminal output should be similar to the following:
@@ -157,12 +185,71 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
 
     If you get a message like `WatchedEvent state:AuthFailed type:None path:null` somewhere in the output (not necessarily at the end of the output), please open an issue in this repository and provide details on the error you are getting, and provide the configuration files and paths.
 
+22. If you were able to SASL authenticate to the ZooKeeper server in StandAlone mode, try executing some ZooKeeper commands:
+
+    ```
+    [zk: zookeeper-server-01.yourdomain.com:2181(CONNECTED) 0] ls /
+    [zookeeper]
+    [zk: zookeeper-server-01.yourdomain.com:2181(CONNECTED) 1] create /mynode "some data"
+    Created /mynode
+    [zk: zookeeper-server-01.yourdomain.com:2181(CONNECTED) 2] ls /
+    [mynode, zookeeper]
+    [zk: zookeeper-server-01.yourdomain.com:2181(CONNECTED) 3] get /mynode
+    some data
+    cZxid = 0xb4
+    ctime = Wed Dec 27 01:08:00 UTC 2017
+    mZxid = 0xb4
+    mtime = Wed Dec 27 01:08:00 UTC 2017
+    pZxid = 0xb4
+    cversion = 0
+    dataVersion = 0
+    aclVersion = 0
+    ephemeralOwner = 0x0
+    dataLength = 9
+    numChildren = 0
+    [zk: zookeeper-server-01.yourdomain.com:2181(CONNECTED) 4] delete /mynode
+    [zk: zookeeper-server-01.yourdomain.com:2181(CONNECTED) 5] ls /
+    [zookeeper]
+    [zk: zookeeper-server-01.yourdomain.com:2181(CONNECTED) 6]
+    ```    
+
+    If you were able to achieve something similar to the above, then continue.
+
+23. Repeat the above for additional ZooKeeper servers to test that you can get them each working in StandAlone mode.
+
 ### Running a ZooKeeper ensemble.
 
+24. Stop all of the ZooKeeper servers that you created and started. On all of the servers, uncomment the `# server.X` lines. Start all of the servers.
 
+    In the output of each of the servers, you should see one with `LEADING` and others with `FOLLOWING - LEADER ELECTION TOOK ...`. If this is the case, then you have the ensemble working correctly.
+
+### Restricting access using ACLs.
+
+25. At this point, anyone can connect to your ZooKeeper ensemble, and use it and abuse it. We cannot (as over version 3.4) prevent people from connecting to it, but we can prevent people from creating, reading, writing, or deleting znodes, and from modifying ACLs.
+
+    Return to you ZooKeeper client machine, and connect without SASL:
+
+    ```
+    bin/zkCli.sh -server zookeeper-server-01.yourdomain.com:2181,zookeeper-server-02.yourdomain.com:2181
+    ```
+
+    and play around, by creating a node, reading it, deleting it, getting the ACL of the root node, etc:
+
+    ```
+    ls /
+    create /badnode "vulnerable"
+    ls /
+    getAcl /badnode
+    delete /badnode
+    getAcl /
+    ```
+
+    Let us restrict access to the root node, so that only our `zktestclient/whatever` can use this ensemble.
+
+26. TBC    
 
 ## References
 
-
-
 Junqueira, Flavio; Reed, Benjamin. ZooKeeper: Distributed Process Coordination (Kindle Location 743). O'Reilly Media. Kindle Edition.
+
+https://stackoverflow.com/questions/30940981/zookeeper-error-cannot-open-channel-to-x-at-election-address

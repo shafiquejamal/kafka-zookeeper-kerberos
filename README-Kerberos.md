@@ -33,11 +33,15 @@ Follow the steps below for primary, secondary, etc, KDCs.
 
     and then reboot (`sudo shutdown -r now`)
 
-7. This step is necessary for Kerberos servers only (not ZooKeeper servers and not Kafka servers). Add the static ip address and subdomain to your hosts file (`/etc/hosts`):
+7. (a) For Kerberos servers (this is not necessary for ZooKeeper servers and Kafka servers, though you can do this for those too), add the static IP address and subdomain to your hosts file (`/etc/hosts`):
 
     `w.x.y.z foo-01`
 
-    This will allow kerberos to resolve the subdomain to the static IP address
+    This will allow kerberos to resolve the subdomain to the static IP address.
+
+    (b) For ZooKeeper servers (you can optionally do this for Kerberos and Kafka servers too), also add a line with the static IP address and the fully qualified domain name:
+
+    `w.x.y.z foo-01.mydomain.com`
 
 
 8. To install and configure Kerberos on the EC2 instance, execute the following commands. If this is fresh install, you can omit the first lines that delete and remove:

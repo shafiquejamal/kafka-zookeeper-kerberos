@@ -160,7 +160,7 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
     ```
 20. Place the `/etc/krb5.conf` file from the Kerberos server that you set up in the `~/jaas/` directory of the client machine, and give yourself read permissions on it.
 
-21. From the `~/zookeeper-3.4.11/` directory, run the following command:
+21. From the `~/zk/zookeeper-3.4.11/` directory, run the following command:
 
     ```
     JVMFLAGS="-Djava.security.auth.login.config=/full/path/to/jaas/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/full/path/to/jass/krb5.conf" bin/zkCli.sh -server zookeeper-server-01.yourdomain.com:2181
@@ -225,31 +225,191 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
 
 ### Restricting access using ACLs.
 
-25. At this point, anyone can connect to your ZooKeeper ensemble, and use it and abuse it. We cannot (as over version 3.4) prevent people from connecting to it, but we can prevent people from creating, reading, writing, or deleting znodes, and from modifying ACLs.
+25. At this point, anyone can connect to your ZooKeeper ensemble, and use it and abuse it. We cannot (as over version 3.4) prevent people from connecting to it, but we can prevent people from creating, reading, writing, or deleting znodes, or from modifying ACLs.
 
     Return to you ZooKeeper client machine, and connect without SASL:
 
     ```
-    bin/zkCli.sh -server zookeeper-server-01.yourdomain.com:2181,zookeeper-server-02.yourdomain.com:2181
+    bin/zkCli.sh -server zookeeper-server-01.yourdomain.com:2181,zookeeper-server-02.yourdomain.com:2181,zookeeper-server-03.yourdomain.com:2181
     ```
 
-    and play around, by creating a node, reading it, deleting it, getting the ACL of the root node, etc:
+    and play around, by creating a node, reading it, deleting it, getting the ACL of the root znode, etc:
 
     ```
-    ls /
-    create /badnode "vulnerable"
-    ls /
-    getAcl /badnode
-    delete /badnode
-    getAcl /
+    [...] ls /
+    [zookeeper]
+    [...] create /badnode "vulnerable"
+    Created /badnode
+    [...] ls /
+    [badnode, zookeeper]
+    [...] getAcl /badnode
+    'world,'anyone
+    : cdrwa
+    [...] delete /badnode
+    [...] ls /
+    [zookeeper]
+    [...] getAcl /
+    'world,'anyone
+    : cdrwa
     ```
 
-    Let us restrict access to the root node, so that only our `zktestclient/whatever` can use this ensemble.
+    Let us create a new node and set permissions on it so that only our `zktestclient/whatever` user may read, write, or delete it, or create child znodes under it.
 
-26. TBC    
+    ```
+    [...] create /newnode "for zk sasl client"
+    Created /newnode
+    [...] ls /
+    [zookeeper, newnode]
+    [...] get /newnode
+    for zk sasl client
+    cZxid = 0x1e0000001a
+    ctime = Wed Dec 27 04:48:37 UTC 2017
+    mZxid = 0x1e0000001a
+    mtime = Wed Dec 27 04:48:37 UTC 2017
+    pZxid = 0x1e0000001a
+    cversion = 0
+    dataVersion = 0
+    aclVersion = 0
+    ephemeralOwner = 0x0
+    dataLength = 18
+    numChildren = 0
+    [...] setAcl /newnode sasl:zktestclient/whatever@YOURDOMAIN.COM:crwd
+    cZxid = 0x1e0000001a
+    ctime = Wed Dec 27 04:48:37 UTC 2017
+    mZxid = 0x1e0000001a
+    mtime = Wed Dec 27 04:48:37 UTC 2017
+    pZxid = 0x1e0000001a
+    cversion = 0
+    dataVersion = 0
+    aclVersion = 1
+    ephemeralOwner = 0x0
+    dataLength = 18
+    numChildren = 0
+    [...] getAcl /newnode
+    'sasl,'sasl:zktestclient/whatever@YOURDOMAIN.COM:crwd
+    : cdrw
+    [...] get /newnode
+    Authentication is not valid : /newnode
+    [...] create /newnode/childofnewnode "child of new node"
+    Authentication is not valid : /newnode/childofnewnode
+    [...] ls /
+    [zookeeper, newnode]
+    ```
+
+    So we created a new znode `/newnode`, but set the ACL for it such that we cannot create child nodes under it nor can we read it - only `zktestclient/whatever` can.
+
+26. Let us now SASL authenticate as `zktestclient/whatever`. On your client machine, execute the following command:
+
+    ```
+    JVMFLAGS="-Djava.security.auth.login.config=/full/path/to/jaas/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/full/path/to/jass/krb5.conf" bin/zkCli.sh -server zookeeper-server-01.yourdomain.com:2181,zookeeper-server-02.yourdomain.com:2181,zookeeper-server-03.yourdomain.com:2181
+    ```
+
+    and reproduce the following:
+
+    ```
+    [...] ls /
+    [zookeeper, newnode]
+    [...] get /newnode
+    for zk sasl client
+    cZxid = 0x1e0000001a
+    ctime = Wed Dec 27 04:48:37 UTC 2017
+    mZxid = 0x1e0000001a
+    mtime = Wed Dec 27 04:48:37 UTC 2017
+    pZxid = 0x1e0000001a
+    cversion = 0
+    dataVersion = 0
+    aclVersion = 1
+    ephemeralOwner = 0x0
+    dataLength = 18
+    numChildren = 0
+    [...] create /newnode/childofnewnode "child of new node"
+    Created /newnode/childofnewnode
+    [...] ls /
+    [zookeeper, newnode]
+    [...] get /newnode/childofnewnode
+    child of new node
+    cZxid = 0x1e0000001f
+    ctime = Wed Dec 27 05:05:16 UTC 2017
+    mZxid = 0x1e0000001f
+    mtime = Wed Dec 27 05:05:16 UTC 2017
+    pZxid = 0x1e0000001f
+    cversion = 0
+    dataVersion = 0
+    aclVersion = 0
+    ephemeralOwner = 0x0
+    dataLength = 17
+    numChildren = 0
+    setAcl /newnode/childofnewnode sasl:zktestclient/whatever@YOURDOMAIN.COM:crwd
+    ```
+
+    We see that, now that we are authenticated as the authorized user, we can create a child znode under our znode, and read that znode and our original znode (its parent). Let us restrict access to the parent znode (`/`).
+
+27. Set the ACL on the root znode, using any connected user. Because the  the root znode currently has the ACL `world:anyone:cdrwa`, anyone can set its ACL.
+
+```
+setAcl /newnode/childofnewnode sasl:zktestclient/whatever@YOURDOMAIN.COM:crwd
+```    
+
+    The root znode is now restricted to only `zktestclient/whatever` and the super user. Remember to set the ACLs as above for all nodes that you create.
+
+28. Try connecting to the other ZooKeper servers to see whether they hold the same state:
+
+```
+JVMFLAGS="-Djava.security.auth.login.config=/full/path/to/jaas/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/full/path/to/jass/krb5.conf" bin/zkCli.sh -server zookeeper-server-03.yourdomain.com:2181
+```
+
+    Get the ACL for `/newnode/childofnewnode`, etc. Do this for three nodes. The results should be the same.
+
+29. For all of your ZooKeper servers, make ZooKeeper as service. There is a nice `init.d` script [here](https://gist.github.com/bejean/b9ff72c6d2143e16e35d) that you can adapt. More info from [debian-administration.org is here](https://debian-administration.org/article/28/Making_scripts_run_at_boot_time_with_Debian)
+
+### ZooKeper super user (optional)
+
+30. ACLs do not apply to super users. Instructions for activating and authenticating as a super user follow. On one of the ZooKeeper servers we will activate the super user login and set the super user password. Choose a ZooKeeper server machine, and execute the following from the `~/zk/zookeeper-3.4.11/` directory in a different bash (terminal) session than the one that is running the server:
+
+    ```
+    export ZK_CLASSPATH=/home/zookeeper/zk/zookeeper-3.4.11/bin/../build/classes:/home/zookeeper/zk/zookeeper-3.4.11/bin/../build/lib/*.jar:/home/zookeeper/zk/zookeeper-3.4.11/bin/../lib/slf4j-log4j12-1.6.1.jar:/home/zookeeper/zk/zookeeper-3.4.11/bin/../lib/slf4j-api-1.6.1.jar:/home/zookeeper/zk/zookeeper-3.4.11/bin/../lib/netty-3.10.5.Final.jar:/home/zookeeper/zk/zookeeper-3.4.11/bin/../lib/log4j-1.2.16.jar:/home/zookeeper/zk/zookeeper-3.4.11/bin/../lib/jline-0.9.94.jar:/home/zookeeper/zk/zookeeper-3.4.11/bin/../lib/audience-annotations-0.5.0.jar:/home/zookeeper/zk/zookeeper-3.4.11/bin/../zookeeper-3.4.11.jar:/home/zookeeper/zk/zookeeper-3.4.11/bin/../src/java/lib/*.jar:/home/zookeeper/zk/zookeeper-3.4.11/bin/../conf:
+    java -cp $ZK_CLASSPATH org.apache.zookeeper.server.auth.DigestAuthenticationProvider super:some-secret-password
+    ```
+
+    (You can get the class path by running `zkEnv.sh` after uncommenting the last line in this file, which echo's the class path to the terminal).
+
+    The output should be similar to:
+
+    ```
+    super:some-secret-password->super:Bl5S86TbxiWTRBCdXR1pfGuau48=
+    ```
+
+    Stop the ZooKeeper server on this machine, and start it again using the following command:
+
+    ```
+    JVMFLAGS="-Djava.security.auth.login.config=/ho/zookeeper/jaas/jaas.conf -Dsun.security.krb5.debug=true -Dzookeeper.DigestAuthenticationProvider.superDigest=super:Bl5S86TbxiWTRBCdXR1pfGuau48=" ZOO_LOG_DIR="/home/zookeeper/log" ZOO_LOG4J_PROP=TRACE,ROLLINGFILE,CONSOLE  bin/zkServer.sh start-foreground
+    ```
+
+31. In a separate bash session on the same machine that you are running this ZooKeper server instance with super user enabled (you can use the same session that you used above to generate the super user password), connect to this ZooKeeper server using a non-SASL authenticated client:
+
+    ```
+    cd ~/zk/zookeeper-3.4.11
+    bin/zkCli.sh -server localhost:2181
+    ```
+
+    Note that this has to be done on the same machine as the ZooKeper server, since traffic between ZooKeper servers and clients is unencrypted (as of ZooKeper 3.4), so you want to avoid sending the super user password over an unsecured network.
+
+32. Authenticate as the super user:
+
+    ```
+    authinfo digest super:some-secret-password
+    ```
+
+    You can now set ACLs, obtain information on any znode by running `get` on that znode, etc.
 
 ## References
 
 Junqueira, Flavio; Reed, Benjamin. ZooKeeper: Distributed Process Coordination (Kindle Location 743). O'Reilly Media. Kindle Edition.
 
 https://stackoverflow.com/questions/30940981/zookeeper-error-cannot-open-channel-to-x-at-election-address
+
+https://gist.github.com/bejean/b9ff72c6d2143e16e35d
+
+https://debian-administration.org/article/28/Making_scripts_run_at_boot_time_with_Debian
+
+https://issues.apache.org/jira/browse/ZOOKEEPER-2170

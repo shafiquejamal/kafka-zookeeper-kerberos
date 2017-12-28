@@ -57,6 +57,10 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
     mkdir /home/zookeeper/dataLogDir
     mkdir /home/zookeeper/jaas
     ln -s /home/zookeeper/zk/zookeeper-3.4.11/conf/zoo.cfg-ensemble /home/zookeeper/zk/zookeeper-3.4.11/conf/zoo.cfg
+    exit
+    sudo ln -s /home/zookeeper/zk/zookeeper-3.4.11 /opt/zookeeper
+    sudo su - zookeeper
+    cd zk/zookeeper-3.4.11
     ```
 
 11. In the `/home/zookeeper/zk/zookeeper-3.4.11/conf/log4j.properties` file, decide where you will place log files. Junqueira & Reed (see References below) recommend writing log files to a separate drive. If you want to keep them on the same drive for now, then replace the lines:
@@ -346,21 +350,46 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
 
 27. Set the ACL on the root znode, using any connected user. Because the  the root znode currently has the ACL `world:anyone:cdrwa`, anyone can set its ACL.
 
-```
-setAcl /newnode/childofnewnode sasl:zktestclient/whatever@YOURDOMAIN.COM:crwd
-```    
+    ```
+    setAcl /newnode/childofnewnode sasl:zktestclient/whatever@YOURDOMAIN.COM:crwd
+    ```    
 
     The root znode is now restricted to only `zktestclient/whatever` and the super user. Remember to set the ACLs as above for all nodes that you create.
 
 28. Try connecting to the other ZooKeper servers to see whether they hold the same state:
 
-```
-JVMFLAGS="-Djava.security.auth.login.config=/full/path/to/jaas/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/full/path/to/jass/krb5.conf" bin/zkCli.sh -server zookeeper-server-03.yourdomain.com:2181
-```
+    ```
+    JVMFLAGS="-Djava.security.auth.login.config=/full/path/to/jaas/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/full/path/to/jass/krb5.conf" bin/zkCli.sh -server zookeeper-server-03.yourdomain.com:2181
+    ```
 
     Get the ACL for `/newnode/childofnewnode`, etc. Do this for three nodes. The results should be the same.
 
-29. For all of your ZooKeper servers, make ZooKeeper as service. There is a nice `init.d` script [here](https://gist.github.com/bejean/b9ff72c6d2143e16e35d) that you can adapt. More info from [debian-administration.org is here](https://debian-administration.org/article/28/Making_scripts_run_at_boot_time_with_Debian)
+29. For all of your ZooKeper servers, make ZooKeeper as service. There is a nice `init.d` script [here](https://gist.github.com/bejean/b9ff72c6d2143e16e35d) that you can adapt. More info from [debian-administration.org is here](https://debian-administration.org/article/28/Making_scripts_run_at_boot_time_with_Debian). I have copied the aforementioned script [here - zookeeper](zookeeper), and adapted it slightly. Execute the following to set up ZooKeeper as a service:
+
+    In /home/zookeeper/.profile, add the following:
+
+    ```
+    export ZOO_LOG_DIR="/home/zookeeper/log"
+    export ZOO_JAAS_CONF="/home/zookeeper/jaas/jaas.conf"
+    export JVMFLAGS="-Djava.security.auth.login.config=$ZOO_JAAS_CONF"
+    export ZOO_LOG4J_PROP=TRACE,ROLLINGFILE
+    ```
+
+    Create an init.d script for ZooKeper:
+
+    ```
+    sudo vi /etc/init.d/zookeeper
+    ```
+
+    Paste the [zookeeper](zookeeper) script in the editor and save it.
+
+    ```
+    sudo chmod 755 /etc/init.d/zookeeper
+    sudo update-rc.d zookeeper defaults
+    sudo service zookeeper start
+    ```
+
+    Now ZooKeeper should start automatically after rebooting.
 
 ### ZooKeper super user (optional)
 

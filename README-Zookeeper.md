@@ -4,7 +4,6 @@
 
 Instructions for setting up a ZooKeeper ensemble and enabling SASL follow.
 
-
 ## Steps
 
 ### Setting up the first Zookeeper server.

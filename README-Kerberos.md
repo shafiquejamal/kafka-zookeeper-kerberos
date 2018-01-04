@@ -12,15 +12,19 @@ Commands that are indented are to be run not at the `bash` prompt but instead at
 
 Follow the steps below for primary, secondary, etc, KDCs.
 
-1. Get a static IP address. If using AWS, this would be an Elastic IP.
+1. Get a static IP address. If using AWS, this would be an Elastic IP. If using Google Cloud, you would reserve a static IP address and then link it to your VM instance.
 
 2. Decide on a subdomain, e.g. `foo-01.mydomain.com`, and create a DNS entry to direct `foo-01.mydomain.com` to the above static IP address.
 
-3. Create an EC2 instance or get a VPS. If using EC2, you might consider one of the Debian Stretch community AMIs (I chose `debian-stretch-hvm-x86_64-gp2-2017-12-17-65723`). I selected a T2 Micro with 1 GB RAM and 8 GB Magnetic Storage. For the Security Group, allow traffic to ports 22 (TCP, for SSH) and 88 (UDP, for Kerberos). Assign your static IP address to this instance.
+3. Create an EC2 instance, Google Cloud VM instance,  or get a VPS. If using EC2, you might consider one of the Debian Stretch community AMIs (I chose `debian-stretch-hvm-x86_64-gp2-2017-12-17-65723`). I selected a T2 Micro with 1 GB RAM and 8 GB Magnetic Storage. For the Security Group, allow traffic to ports 22 (TCP, for SSH) and 88 (UDP, for Kerberos). Assign your static IP address to this instance.
 
-4. This step is relevant only for ZooKeeper servers, but might be useful for Kerberos and Kafka servers as well: make sure that a reverse DNS look up on your static IP address resolves to `foo-01.mydomain.com`. If you're using AWS, see [here](https://aws.amazon.com/blogs/aws/reverse-dns-for-ec2s-elastic-ip-addresses/) for how to request AWS to set up the mapping for a reverse DNS lookup. If a reverse DNS lookup does not resolve to `foo-01.mydomain.com`, then connecting to your ZooKeeper Server from the ZooKeeper client will not work (though there is a hacky workaround).
+    If using Google Compute Cloud, currently Debian 9 Stretch is the default VM image.
 
-5. SSH into your instance, and run the `update` and `upgrade` commands, and install `java`:
+4. This step is relevant only for ZooKeeper servers, but might be useful for Kerberos and Kafka servers as well: make sure that a reverse DNS look up on your static IP address resolves to `foo-01.mydomain.com`. If you're using AWS, see [here](https://aws.amazon.com/blogs/aws/reverse-dns-for-ec2s-elastic-ip-addresses/) for how to request AWS to set up the mapping for a reverse DNS lookup. If a reverse DNS lookup does not resolve to `foo-01.mydomain.com`, then connecting to your ZooKeeper Server from the ZooKeeper client will not work.
+
+    If using Google Cloud, the process is easier - you can [create a PTR record](https://cloud.google.com/compute/docs/instances/create-ptr-record) and then verify it by creating a TXT record as per the instructions you will get at the page for creating a PTR record.  
+
+5. Make sure that port 22 is open. SSH into your instance, and run the `update` and `upgrade` commands, and install `java`:
 
     ```
     sudo apt-get update && sudo apt-get -y upgrade
@@ -33,15 +37,17 @@ Follow the steps below for primary, secondary, etc, KDCs.
 
     and then reboot (`sudo shutdown -r now`)
 
+    On Google Cloud, this step is not necessary.
+
 7. (a) For Kerberos servers (this is not necessary for ZooKeeper servers and Kafka servers, though you can do this for those too), add the static IP address and subdomain to your hosts file (`/etc/hosts`):
 
     `w.x.y.z foo-01`
 
     This will allow kerberos to resolve the subdomain to the static IP address.
 
-    (b) For ZooKeeper servers (you can optionally do this for Kerberos and Kafka servers too), also add a line with the static IP address and the fully qualified domain name:
+    (b) Optionally, also add a line with the loop-back address and the fully qualified domain name:
 
-    `w.x.y.z foo-01.mydomain.com`
+    `127.0.0.1 foo-01.mydomain.com`
 
 
 8. To install and configure Kerberos on the EC2 instance, execute the following commands. If this is fresh install, you can omit the first lines that delete and remove:
@@ -126,7 +132,7 @@ Test that the ticket was created:
 klist  # should output some issued date, expire date, etc.   
 ```
 
-While we are here, lets create principals for a `zookeeper`. Let us assume that your zookeeper server will be `zookeeper.yourdomain.com`. Execute the following (you will have to choose a password for each):
+While we are here, lets create principals for our ZooKeeper ensemble and our Kafka cluster. Let us assume that your zookeeper server will be `zookeeper-server-0X.yourdomain.com`. Execute the following (you will have to choose a password for each):
 
 ```
 sudo kadmin.local
@@ -134,17 +140,23 @@ sudo kadmin.local
 	addprinc zookeeper/zookeeper-server-01.yourdomain.com
 	addprinc zookeeper/zookeeper-server-02.yourdomain.com
 	addprinc zookeeper/zookeeper-server-03.yourdomain.com
+  addprinc kafka-broker-1-1/server-01.yourdomain.com
+  addprinc kafka-broker-2-1/server-02.yourdomain.com
+  addprinc kafka-broker-2-2/server-02.yourdomain.com
 ```
 
-Export the keytabs - Zookeper servers and clients will use these (you can name the `keytab` files whatever you want, you don't have to follow the convention I have used below):
+Export the keytabs - Zookeeper servers and clients will use these (you can name the `keytab` files whatever you want, you don't have to follow the convention I have used below):
 
-```
+  ```
   ktadd -k /etc/security/zookeeperclient.whatever.keytab zookeeperclient/whatever
   ktadd -k /etc/security/zookeeper.zookeeper-server-01.yourdomain.com.keytab zookeeper/zookeeper-server-01.yourdomain.com
   ktadd -k /etc/security/zookeeper.zookeeper-server-02.yourdomain.com.keytab zookeeper/zookeeper-server-02.yourdomain.com
   ktadd -k /etc/security/zookeeper.zookeeper-server-03.yourdomain.com.keytab zookeeper/zookeeper-server-03.yourdomain.com
+  ktadd -k /etc/security/kafka-broker-10.server-01.yourdomain.com.keytab kafka-broker-10/server-01.yourdomain.com
+  ktadd -k /etc/security/kafka-broker-20.server-02.yourdomain.com.keytab kafka-broker-20/server-02.yourdomain.com
+  ktadd -k /etc/security/kafka-broker-21.server-02.yourdomain.com.keytab kafka-broker-21/server-02.yourdomain.com
   quit
-```
+  ```
 
 The next step is to [set up and test connection a to a Zookeeper ensemble](README-Zookeeper.md).
 
@@ -159,3 +171,5 @@ https://help.ubuntu.com/lts/serverguide/kerberos.html
 https://serverfault.com/questions/592893/completely-uninstall-kerberos-on-ubuntu-server
 
 https://help.ubuntu.com/community/Kerberos
+
+https://aws.amazon.com/blogs/aws/reverse-dns-for-ec2s-elastic-ip-addresses

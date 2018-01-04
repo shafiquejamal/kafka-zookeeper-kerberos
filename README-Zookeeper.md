@@ -8,9 +8,9 @@ Instructions for setting up a ZooKeeper ensemble and enabling SASL follow.
 
 ### Setting up the first Zookeeper server.
 
-Instructions for setting up the first Zookeeper server follow. After you have set up the first Zookeper server, you can follow these same steps for setting up the other servers in the ensemble, with the exception that you would use a different static IP address and change the subdomain from `zookeeper-server-01` to `zookeeper-server-k`, where `k` is `02`, `03`, etc.
+Instructions for setting up the first Zookeeper server follow. After you have set up the first ZooKeeper server, you can follow these same steps for setting up the other servers in the ensemble, with the exception that you would use a different static IP address and change the subdomain from `zookeeper-server-01` to `zookeeper-server-k`, where `k` is `02`, `03`, etc.
 
-Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerberos.md), except that for this demonstration the subdomain will be `zookeeper-server-01` (so you will replace the contents of `/etc/hostname` with `zookeeper-server-01.mydomain.com` and add `YOUR.STATIC.IP.ADDRESS zookeeper-server-01` to `/etc/hosts`).
+Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerberos.md), except that for this demonstration the subdomain will be `zookeeper-server-01` (so you will replace the contents of `/etc/hostname` with `zookeeper-server-01.mydomain.com` and add `YOUR.STATIC.IP.ADDRESS zookeeper-server-01` to `/etc/hosts`). Also, make sure that the following ports are open: 2181, 2888, 3888.
 
 7. Add a user zookeeper:
 
@@ -355,7 +355,7 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
 
     The root znode is now restricted to only `zktestclient/whatever` and the super user. Remember to set the ACLs as above for all nodes that you create.
 
-28. Try connecting to the other ZooKeper servers to see whether they hold the same state:
+28. Try connecting to the other ZooKeeper servers to see whether they hold the same state:
 
     ```
     JVMFLAGS="-Djava.security.auth.login.config=/full/path/to/jaas/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/full/path/to/jass/krb5.conf" bin/zkCli.sh -server zookeeper-server-03.yourdomain.com:2181
@@ -363,7 +363,7 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
 
     Get the ACL for `/newnode/childofnewnode`, etc. Do this for three nodes. The results should be the same.
 
-29. For all of your ZooKeper servers, make ZooKeeper as service. There is a nice `init.d` script [here](https://gist.github.com/bejean/b9ff72c6d2143e16e35d) that you can adapt. More info from [debian-administration.org is here](https://debian-administration.org/article/28/Making_scripts_run_at_boot_time_with_Debian). I have copied the aforementioned script [here - zookeeper](zookeeper), and adapted it slightly. Execute the following to set up ZooKeeper as a service:
+29. For all of your ZooKeeper servers, make ZooKeeper a service. There is a nice `init.d` script [here](https://gist.github.com/bejean/b9ff72c6d2143e16e35d) that you can adapt. More info from [debian-administration.org is here](https://debian-administration.org/article/28/Making_scripts_run_at_boot_time_with_Debian). I have copied the aforementioned script [here - zookeeper](zookeeper), and adapted it slightly. Execute the following to set up ZooKeeper as a service:
 
     In /home/zookeeper/.profile, add the following:
 
@@ -374,7 +374,7 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
     export ZOO_LOG4J_PROP=TRACE,ROLLINGFILE
     ```
 
-    Create an init.d script for ZooKeper:
+    Create an init.d script for ZooKeeper:
 
     ```
     sudo vi /etc/init.d/zookeeper
@@ -383,6 +383,7 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
     Paste the [zookeeper](zookeeper) script in the editor and save it.
 
     ```
+    sudo chown root. /etc/init.d/zookeeper
     sudo chmod 755 /etc/init.d/zookeeper
     sudo update-rc.d zookeeper defaults
     sudo service zookeeper start
@@ -390,7 +391,7 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
 
     Now ZooKeeper should start automatically after rebooting.
 
-### ZooKeper super user (optional)
+### ZooKeeper super user (optional)
 
 30. ACLs do not apply to super users. Instructions for activating and authenticating as a super user follow. On one of the ZooKeeper servers we will activate the super user login and set the super user password. Choose a ZooKeeper server machine, and execute the following from the `~/zk/zookeeper-3.4.11/` directory in a different bash (terminal) session than the one that is running the server:
 
@@ -413,14 +414,14 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
     JVMFLAGS="-Djava.security.auth.login.config=/ho/zookeeper/jaas/jaas.conf -Dsun.security.krb5.debug=true -Dzookeeper.DigestAuthenticationProvider.superDigest=super:Bl5S86TbxiWTRBCdXR1pfGuau48=" ZOO_LOG_DIR="/home/zookeeper/log" ZOO_LOG4J_PROP=TRACE,ROLLINGFILE,CONSOLE  bin/zkServer.sh start-foreground
     ```
 
-31. In a separate bash session on the same machine that you are running this ZooKeper server instance with super user enabled (you can use the same session that you used above to generate the super user password), connect to this ZooKeeper server using a non-SASL authenticated client:
+31. In a separate bash session on the same machine that you are running this ZooKeeper server instance with super user enabled (you can use the same session that you used above to generate the super user password), connect to this ZooKeeper server using a non-SASL authenticated client:
 
     ```
     cd ~/zk/zookeeper-3.4.11
     bin/zkCli.sh -server localhost:2181
     ```
 
-    Note that this has to be done on the same machine as the ZooKeper server, since traffic between ZooKeper servers and clients is unencrypted (as of ZooKeper 3.4), so you want to avoid sending the super user password over an unsecured network.
+    Note that this has to be done on the same machine as the ZooKeeper server, since traffic between ZooKeeper servers and clients is unencrypted (as of ZooKeeper 3.4), so you want to avoid sending the super user password over an unsecured network.
 
 32. Authenticate as the super user:
 

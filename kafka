@@ -1,0 +1,100 @@
+#!/bin/sh
+#
+# This script was adapted from https://gist.github.com/bejean/b9ff72c6d2143e16e35d and
+#   https://gist.github.com/superscott/a1c67871cdd54b0c8693
+#
+# Other references:
+#   https://stackoverflow.com/questions/41014742/where-will-be-nohup-file-created-stored
+#
+# Purpose: This script starts and stops the Kafka daemon
+#
+# chkconfig: - 90 10
+# description:  Kafka daemon
+
+### BEGIN INIT INFO
+# Provides:          kafka
+# Required-Start:    $network $local_fs $remote_fs
+# Required-Stop:     $network $local_fs $remote_fs
+# Should-Start:
+# Should-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Controls Kafka as a Service
+### END INIT INFO
+
+INSTALL_DIR="/opt/kafka"
+
+if [ ! -d "$INSTALL_DIR" ]; then
+  echo "$INSTALL_DIR not found! Please check the INSTALL_DIR setting in your $0 script."
+  exit 1
+fi
+
+# Specify the user to run Kafka as; if not set, then Kafka will not run.
+RUNAS="kafka"
+
+# verify the specified run as user exists
+runas_uid="`id -u "$RUNAS"`"
+if [ $? -ne 0 ]; then
+  echo "User $RUNAS not found! Please create the $RUNAS user before running this script."
+  exit 1
+fi
+
+DAEMON_NAME=kafka
+MEMORY_LIMITS="-Xmx256M -Xms128M"
+KAFKA_HEAP_OPTS="-Djava.security.auth.login.config=$INSTALL_DIR/config/jaas.conf -Djava.security.krb5.conf=/etc/krb5.conf $MEMORY_LIMITS"
+
+get_pid () {
+  echo `ps ax | grep -i 'kafka.Kafka' | grep -v grep | grep -iv consumer | grep -iv producer | grep -i server-sasl-brokers-zookeeper.properties | awk '{print $1}'`
+}
+
+case "$1" in
+  start)
+    # Start daemon.
+    pid=$( get_pid )
+    if [ -n "$pid" ]
+      then
+      echo "Kafka was already running (pid: $pid)"
+    else
+      echo "Starting $DAEMON_NAME";
+      if [ -n "$RUNAS" ]; then
+        sudo su -c "export KAFKA_HEAP_OPTS=\"$KAFKA_HEAP_OPTS\" && nohup $INSTALL_DIR/bin/kafka-server-start.sh -daemon $INSTALL_DIR/config/server-sasl-brokers-zookeeper.properties > /tmp/nohup.out" - "$RUNAS"
+      else
+        echo "RUNAS user not specified"
+      fi
+    fi
+    ;;
+
+  stop)
+    # Stop daemons.
+    echo "Shutting down $DAEMON_NAME";
+    pid=$( get_pid )
+    if [ -n "$pid" ]
+      then
+      kill -9 $pid
+    else
+      echo "Kafka was not Running"
+    fi
+    ;;
+
+  restart)
+    $0 stop
+    sleep 2
+    $0 start
+    ;;
+
+  status)
+    pid=$( get_pid )
+    if [ -n "$pid" ]
+    then
+      echo "Kafka is Running as PID: $pid"
+    else
+      echo "Kafka is not Running"
+    fi
+    ;;
+
+  *)
+    echo "Usage: $0 {start|stop|restart|status}"
+    exit
+esac
+
+exit 0

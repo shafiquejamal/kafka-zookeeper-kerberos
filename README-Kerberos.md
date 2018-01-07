@@ -45,7 +45,7 @@ Follow the steps below for primary, secondary, etc, KDCs.
 
     This will allow kerberos to resolve the subdomain to the static IP address.
 
-    (b) Optionally, also add a line with the loop-back address and the fully qualified domain name:
+    (b) For Kafka nodes, and optionally for all other nodes, also add a line with the loop-back address and the fully qualified domain name:
 
     `127.0.0.1 foo-01.mydomain.com`
 
@@ -140,9 +140,10 @@ sudo kadmin.local
 	addprinc zookeeper/zookeeper-server-01.yourdomain.com
 	addprinc zookeeper/zookeeper-server-02.yourdomain.com
 	addprinc zookeeper/zookeeper-server-03.yourdomain.com
-  addprinc kafka-broker-1-1/server-01.yourdomain.com
-  addprinc kafka-broker-2-1/server-02.yourdomain.com
-  addprinc kafka-broker-2-2/server-02.yourdomain.com
+  addprinc kafka/server-01.yourdomain.com
+  addprinc kafka/server-02.yourdomain.com
+  addprinc consumer1/whatever
+  addprinc producer1/whatever
 ```
 
 Export the keytabs - Zookeeper servers and clients will use these (you can name the `keytab` files whatever you want, you don't have to follow the convention I have used below):
@@ -152,9 +153,10 @@ Export the keytabs - Zookeeper servers and clients will use these (you can name 
   ktadd -k /etc/security/zookeeper.zookeeper-server-01.yourdomain.com.keytab zookeeper/zookeeper-server-01.yourdomain.com
   ktadd -k /etc/security/zookeeper.zookeeper-server-02.yourdomain.com.keytab zookeeper/zookeeper-server-02.yourdomain.com
   ktadd -k /etc/security/zookeeper.zookeeper-server-03.yourdomain.com.keytab zookeeper/zookeeper-server-03.yourdomain.com
-  ktadd -k /etc/security/kafka-broker-10.server-01.yourdomain.com.keytab kafka-broker-10/server-01.yourdomain.com
-  ktadd -k /etc/security/kafka-broker-20.server-02.yourdomain.com.keytab kafka-broker-20/server-02.yourdomain.com
-  ktadd -k /etc/security/kafka-broker-21.server-02.yourdomain.com.keytab kafka-broker-21/server-02.yourdomain.com
+  ktadd -k /etc/security/kafka.server-01.yourdomain.com.keytab kafka/server-01.yourdomain.com
+  ktadd -k /etc/security/kafka.server-02.yourdomain.com.keytab kafka/server-02.yourdomain.com
+  ktadd -k /etc/security/consumer1.whatever.keytab consumer1/whatever
+  ktadd -k /etc/security/producer1.whatever.keytab producer1/whatever
   quit
   ```
 

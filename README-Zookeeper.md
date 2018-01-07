@@ -411,7 +411,7 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
     Stop the ZooKeeper server on this machine, and start it again using the following command:
 
     ```
-    JVMFLAGS="-Djava.security.auth.login.config=/ho/zookeeper/jaas/jaas.conf -Dsun.security.krb5.debug=true -Dzookeeper.DigestAuthenticationProvider.superDigest=super:Bl5S86TbxiWTRBCdXR1pfGuau48=" ZOO_LOG_DIR="/home/zookeeper/log" ZOO_LOG4J_PROP=TRACE,ROLLINGFILE,CONSOLE  bin/zkServer.sh start-foreground
+    JVMFLAGS="-Djava.security.auth.login.config=/home/zookeeper/jaas/jaas.conf -Dsun.security.krb5.debug=true -Dzookeeper.DigestAuthenticationProvider.superDigest=super:Bl5S86TbxiWTRBCdXR1pfGuau48=" ZOO_LOG_DIR="/home/zookeeper/log" ZOO_LOG4J_PROP=TRACE,ROLLINGFILE,CONSOLE  bin/zkServer.sh start-foreground
     ```
 
 31. In a separate bash session on the same machine that you are running this ZooKeeper server instance with super user enabled (you can use the same session that you used above to generate the super user password), connect to this ZooKeeper server using a non-SASL authenticated client:
@@ -426,7 +426,7 @@ Steps 1 through 7, are the same as [those for setting up Kerberos](README-Kerber
 32. Authenticate as the super user:
 
     ```
-    authinfo digest super:some-secret-password
+    addauth digest super:some-secret-password
     ```
 
     You can now set ACLs, obtain information on any znode by running `get` on that znode, etc.

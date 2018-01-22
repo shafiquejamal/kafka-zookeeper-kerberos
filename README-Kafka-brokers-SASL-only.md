@@ -34,12 +34,11 @@ At this point you should have your Kafka servers set up. What makes a Kafka serv
 
     ```
     sudo su - kafka
+    mkdir ~/log
     wget -c http://apache.mirror.globo.tech/kafka/1.0.0/kafka_2.11-1.0.0.tgz
     tar -zxvf kafka_2.11-1.0.0.tgz
     exit
     sudo ln -s /home/kafka/kafka_2.11-1.0.0 /opt/kafka
-    sudo mkdir /var/log/kafka
-    sudo chown kafka. /var/log/kafka
     sudo su - kafka
     cd kafka_2.11-1.0.0
     ```
@@ -60,7 +59,7 @@ At this point you should have your Kafka servers set up. What makes a Kafka serv
     super.users=kafka
     delete.topic.enable=true
     auto.create.topics.enable
-    log.dirs=/var/log/kafka
+    log.dirs=/home/kafka/log
     zookeeper.connect=zookeeper-server-01.yourdomain.com:2181,zookeeper-server-02.yourdomain.com:2181,zookeeper-server-03.yourdomain.com:2181/apps/kafka-cluster-demo # Include all of your ZooKeeper servers - I use 3.
     ```
 
@@ -128,14 +127,14 @@ At this point you should have your Kafka servers set up. What makes a Kafka serv
         KAFKA_HEAP_OPTS="-Djava.security.auth.login.config=/home/kafka/kafka_2.11-1.0.0/config/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/etc/krb5.conf -Xmx256M -Xms128M" \
           bin/kafka-acls.sh --authorizer-properties \
           zookeeper.connect=zookeeper-server-01.yourdomain.com:2181,zookeeper-server-02.yourdomain.com:2181,zookeeper-server-03.yourdomain.com:2181/apps/kafka-cluster-demo \
-          --add --allow-principal User:producer1 --producer --topic test-topic
+          --add --allow-principal User:producer1/whatever@EIGENROUTE.COM --producer --topic test-topic
 
     and for the consumer:    
 
         KAFKA_HEAP_OPTS="-Djava.security.auth.login.config=/home/kafka/kafka_2.11-1.0.0/config/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/etc/krb5.conf -Xmx256M -Xms128M" \
           bin/kafka-acls.sh --authorizer-properties \
           zookeeper.connect=zookeeper-server-01.yourdomain.com:2181,zookeeper-server-02.yourdomain.com:2181,zookeeper-server-03.yourdomain.com:2181/apps/kafka-cluster-demo \
-          --add --allow-principal User:consumer1 --consumer --topic test-topic --group Group-1
+          --add --allow-principal User:consumer1/whatever@EIGENROUTE.COM --consumer --topic test-topic --group Group-1
 
 ### Testing that you can write to and read from a topic
 
@@ -206,6 +205,14 @@ At this point you should have your Kafka servers set up. What makes a Kafka serv
       --delete --topic test-topic
     ```    
 
+    Note: deleting topics is flaky. You might have to connect to Zookeeper as `super` and delete the topic manually by executing the following:
+
+    ```
+    rmr /apps/kafka-cluster-demo/brokers/topics/test-topic
+    ```
+
+    (the reference for this is [here](https://stackoverflow.com/a/33538299/2251463))
+
 ### Make the Kafka broker a service
 
 19. If the previous step succeeds, then make this Kafka broker a service using the `init.d` script [here](kafka). Go back to the windown where your Kafka broker is running, and stop the broker. Place this script in the `/etc/init.d/` directory, make it world executable, make it a service:
@@ -220,11 +227,68 @@ At this point you should have your Kafka servers set up. What makes a Kafka serv
 
 ### Setting up the second Kafka node/broker
 
-20. Set up a second Kafka server, just as you set up the first Kafka server - repeat steps 1 though 7, and 9 through 14 above, using a different broker ID subdomain. I will use a broker ID of `2` and the subdomain `server-02`.
+20. Set up a second Kafka server, just as you set up the first Kafka server - repeat steps 1 though 7, 9 through 14, and step 19 above, using a different broker ID and subdomain. I will use a broker ID of `2` and the subdomain `server-02`.
+
+21. Now, log into the server of the first broker (server-01) as kafka, navigate to the `kafka_2.11-1.0.0/` directory, and create a topic. Basically, execute step 15 above again, except name the new test topic `test-topic2`. `describe` the new topic, and grant the appropriate permissions to the producer and consumer for the new topic.
+
+    ```
+    KAFKA_OPTS="-Djava.security.auth.login.config=/home/kafka/kafka_2.11-1.0.0/config/jaas.conf -Djava.security.krb5.conf=/etc/krb5.conf"  \
+      bin/kafka-topics.sh --create \
+      --zookeeper zookeeper-server-01.yourdomain.com:2181,zookeeper-server-02.yourdomain.com:2181,zookeeper-server-03.yourdomain.com:2181/apps/kafka-cluster-demo \
+      --replication-factor 2 \
+      --partitions 9 \
+      --topic test-topic2
+
+    KAFKA_OPTS="-Djava.security.auth.login.config=/home/kafka/kafka_2.11-1.0.0/config/jaas.conf -Djava.security.krb5.conf=/etc/krb5.conf"  \
+      bin/kafka-topics.sh --describe \
+      --zookeeper zookeeper-server-01.yourdomain.com:2181,zookeeper-server-02.yourdomain.com:2181,zookeeper-server-03.yourdomain.com:2181/apps/kafka-cluster-demo
+   ```    
+
+    The output should show that `test-topic2` has 9 partitions, that the leader of each partition is either 1 or 2, and that the Isrs are either 1,2 or 2,1. If instead you get output showing that, for all partitions, the leader is "none" and the Isrs are blank, then resart both brokers. I found this to be necessary if I create the topic on Broker 2 instead of Broker 1. See [here](https://stackoverflow.com/questions/48143483/kafka-producer-in-a-multi-broker-multi-server-cluster-cannot-write-to-newly-cre) for more info. Weird.
+
+    Now grant the necessary permissions for the producer and the consumer:  
+
+    ```
+    KAFKA_HEAP_OPTS="-Djava.security.auth.login.config=/home/kafka/kafka_2.11-1.0.0/config/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/etc/krb5.conf -Xmx256M -Xms128M" \
+      bin/kafka-acls.sh --authorizer-properties \
+      zookeeper.connect=zookeeper-server-01.yourdomain.com:2181,zookeeper-server-02.yourdomain.com:2181,zookeeper-server-03.yourdomain.com:2181/apps/kafka-cluster-demo \
+      --add --allow-principal User:producer1/whatever@EIGENROUTE.COM --producer --topic test-topic2
+
+    KAFKA_HEAP_OPTS="-Djava.security.auth.login.config=/home/kafka/kafka_2.11-1.0.0/config/jaas.conf -Dsun.security.krb5.debug=true -Djava.security.krb5.conf=/etc/krb5.conf -Xmx256M -Xms128M" \
+      bin/kafka-acls.sh --authorizer-properties \
+      zookeeper.connect=zookeeper-server-01.yourdomain.com:2181,zookeeper-server-02.yourdomain.com:2181,zookeeper-server-03.yourdomain.com:2181/apps/kafka-cluster-demo \
+      --add --allow-principal User:consumer1/whatever@EIGENROUTE.COM --consumer --topic test-topic2 --group Group-1
+    ```  
+
+    This also might not work on the broker server on which you are executing the command, as you might have to execute the command on the other broker. Yes, more Kafka weirdness. For me, the producer command failed on the Broker 1 server with the following error:
+
+    ```
+    Error while executing ACL command: org.apache.zookeeper.KeeperException$NoAuthException:
+      KeeperErrorCode = NoAuth for /kafka-acl-changes/acl_changes_0000000000
+org.I0Itec.zkclient.exception.ZkException: org.apache.zookeeper.KeeperException$NoAuthException:
+  KeeperErrorCode = NoAuth for /kafka-acl-changes/acl_changes_0000000000
+
+    ```
+
+    When I checked the permissions on ZooKeeper of the `/apps/kafka-cluster-demo/kafka-acl-changes/acl_changes_0000000000` node, I saw that only Broker 2 has write permission on this node:
+
+    ```
+    [zk: zookeeper-server-03.eigenroute.com:2181(CONNECTED) 0] getAcl /apps/kafka-cluster-demo/kafka-acl-changes/acl_changes_0000000000
+    'world,'anyone
+    : r
+    'sasl,'kafka/server-02.eigenroute.com@EIGENROUTE.COM
+    : cdrwa
+    [zk: zookeeper-server-03.eigenroute.com:2181(CONNECTED) 1]
+    ```
+
+    So I had to set the permissions using the Broker 2 server. This worked - the producer was able to write to and the consumer was able to read from the topic.
+
+22. On your local machine, as before, start a producer and consumer in separate terminal tabs. Use the same producer and consumers and before, except set the topic to `test-topic2` for both. Enter text in the producer tab and you should see it output in the consumer tab.
 
 
+Well this was a pain. I found two instances of Kafka weirdness. It shouldn't matter on which Broker server you create topics or grant permissions, but apparently it does.
 
-
+Next up: SSL between Kafka clients and Brokers.     
 
 
 ## References
@@ -238,3 +302,7 @@ https://www.confluent.io/blog/apache-kafka-security-authorization-authentication
 https://www.gitbook.com/book/jaceklaskowski/apache-kafka/details
 
 https://kafka.apache.org/
+
+https://stackoverflow.com/a/33538299/2251463
+
+https://stackoverflow.com/questions/48143483/kafka-producer-in-a-multi-broker-multi-server-cluster-cannot-write-to-newly-cre
